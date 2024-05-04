@@ -8,5 +8,6 @@ src/.idea/
 gradle*
 out
 .idea
+*.class
 
 .DS_STORE
