@@ -1,0 +1,12 @@
+/bin/
+.gradle/
+src/.idea/
+/build/
+/.settings/
+/generated/
+/run/
+gradle*
+out
+.idea
+
+.DS_STORE
