@@ -3,32 +3,38 @@ import java.io.*;
 
 public class Client {
 
+    private final String hostname;
+    private final int port;
+
+    public Client(String hostname, int port) {
+        this.hostname = hostname;
+        this.port = port;
+    }
+
+    private void authenticate() {
+        Authentication authentication = new Authentication(this.hostname, this.port);
+        authentication.authenticate();
+    }
+
+    private static void usage() {
+        System.out.println("Wrong usage");
+    }
+
     public static void main(String[] args) {
-        if (args.length < 1) return;
+        if (args.length < 1 || args.length > 3) {
+            Client.usage();
+            return;
+        }
 
-        //String hostname = args[0];
         int port = Integer.parseInt(args[0]);
+        String hostname = args.length == 1 ? "localhost" : args[1];
 
-        try (Socket socket = new Socket("localhost", port)) {
-
-            OutputStream output = socket.getOutputStream();
-            PrintWriter writer = new PrintWriter(output, true);
-            writer.println("new Date()?".toString());
-
-            InputStream input = socket.getInputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-
-            String time = reader.readLine();
-
-            System.out.println(time);
-
-        } catch (UnknownHostException ex) {
-
-            System.out.println("Server not found: " + ex.getMessage());
-
-        } catch (IOException ex) {
-
-            System.out.println("I/O error: " + ex.getMessage());
+        try {
+            Client client = new Client(hostname, port);
+            client.authenticate();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
+
 }

@@ -24,14 +24,28 @@ public class Server {
                 InputStream input = socket.getInputStream();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(input));
 
-                String time = reader.readLine();
+                String command = reader.readLine();
 
-                System.out.println("New client connected: "+ time);
+                System.out.println("Received command " + command);
 
                 OutputStream output = socket.getOutputStream();
                 PrintWriter writer = new PrintWriter(output, true);
 
-                writer.println(new Date().toString());
+                String[] tokens = command.split(";");
+                String operation = tokens[0];
+                String username = tokens[1];
+                String password = tokens[2];
+
+                Database database = new Database();
+                boolean sucessfull = operation.equals("login") ?
+                        database.authenticateUser(username, password) :
+                        database.registerUser(username, password);
+
+                writer.println(sucessfull ? "SUCCESS" : "ERROR");
+
+                //System.out.println("entra");
+                //while (true) {}
+                //System.out.println("sai");
             }
 
         } catch (IOException ex) {
