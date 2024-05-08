@@ -59,7 +59,6 @@ public class Authentication {
             System.out.println("Selection? ");
 
             Scanner scanner = new Scanner(System.in);
-
             while (true) {
                 int selection;
 
@@ -88,8 +87,29 @@ public class Authentication {
 
                 InputStream input = socket.getInputStream();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(input));
+                String response = reader.readLine(); // Read the server response once
 
-                System.out.println("received from server: " + reader.readLine());
+                System.out.println("received from server: " + response);
+
+                if(response.equals("SUCCESS")){
+                    System.out.println("Authentication complete.");
+                    System.out.println("Waiting for players to join...");
+                    break;
+                }
+            }
+            while (true){
+                
+                InputStream input = socket.getInputStream();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(input));
+                String response = reader.readLine();
+
+
+                if (response != null && response.equals("GAME")) {
+                    System.out.println("|| 2 PLAYERS FOUND ||");
+                    System.out.println("Here we go! Game is starting...");
+                    break;
+                }
+
             }
 
         } catch (Exception e) {
