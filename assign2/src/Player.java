@@ -1,13 +1,10 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.Socket;
 
 public class Player {
 
-    private String username;
-    private Socket socket;
+    private final String username;
+    private final Socket socket;
     private PrintWriter writer;
     private BufferedReader reader;
     private int rank;
@@ -21,7 +18,7 @@ public class Player {
             this.writer = new PrintWriter(this.socket.getOutputStream(), true);
             this.reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
 
-            System.out.println("Player " + this.username + " connected");
+            System.out.println(this.username + " connected");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -34,6 +31,8 @@ public class Player {
     public BufferedReader getReader() {
         return this.reader;
     }
+
+    public Socket getSocket() { return this.socket; }
 
     public String getUsername() {
         return this.username;

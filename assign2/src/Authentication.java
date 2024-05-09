@@ -7,12 +7,10 @@ import java.util.Scanner;
 
 public class Authentication {
 
-    private final String hostname;
-    private final int port;
+    private final Socket socket;
 
-    public Authentication(String hostname, int port) {
-        this.hostname = hostname;
-        this.port = port;
+    public Authentication(Socket socket) {
+        this.socket = socket;
     }
 
     private String buildMessage(String operation) {
@@ -51,14 +49,14 @@ public class Authentication {
         return input.trim().length() != 0;
     }
 
-    public void authenticate() {
-        try (Socket socket = new Socket(this.hostname, this.port)) {
+    public boolean authenticate() {
+        try {
             System.out.println("Select an option:");
             System.out.println("[0] Login");
             System.out.println("[1] Register");
             System.out.println("Selection? ");
-
             Scanner scanner = new Scanner(System.in);
+
             while (true) {
                 int selection;
 
@@ -66,17 +64,18 @@ public class Authentication {
                     selection = scanner.nextInt();
                 } catch (InputMismatchException e) {
                     System.out.println("Input must be an integer");
+                    scanner.nextLine();
                     continue;
                 }
 
                 if (selection != 0 && selection != 1) {
                     System.out.println("Input must be 0 or 1");
+                    scanner.nextLine();
                     continue;
                 }
 
-                String message = selection == 0 ?
-                        buildMessage("login") :
-                        buildMessage("register");
+                String operation = selection == 0 ? "login" : "register";
+                String message = buildMessage(operation);
 
                 System.out.println("sending authentication message to server: " + message);
 
@@ -89,31 +88,22 @@ public class Authentication {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(input));
                 String response = reader.readLine(); // Read the server response once
 
-                System.out.println("received from server: " + response);
-
-                if(response.equals("SUCCESS")){
+                if(response.equals(operation + " successful")){
                     System.out.println("Authentication complete.");
-                    System.out.println("Waiting for players to join...");
-                    break;
-                }
-            }
-            while (true){
-                
-                InputStream input = socket.getInputStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-                String response = reader.readLine();
-
-
-                if (response != null && response.equals("GAME")) {
-                    System.out.println("|| 2 PLAYERS FOUND ||");
-                    System.out.println("Here we go! Game is starting...");
-                    break;
+                    return true;
                 }
 
+                System.out.println(response);
+                System.out.println("Select an option:");
+                System.out.println("[0] Login");
+                System.out.println("[1] Register");
+                System.out.println("Selection? ");
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        return false;
     }
+
 }
