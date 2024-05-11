@@ -14,10 +14,12 @@ public class Client {
     }
 
     private void listen() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
             while (true) {
                 String response = reader.readLine();
-                System.out.println(response);
+                System.out.println("received from server: " + response);
+                writer.println("Okay chief!");
             }
         } catch (Exception e) {
             e.printStackTrace();

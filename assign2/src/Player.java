@@ -1,3 +1,5 @@
+import utils.Pair;
+
 import java.io.*;
 import java.net.Socket;
 
@@ -5,31 +7,22 @@ public class Player {
 
     private final String username;
     private final Socket socket;
-    private PrintWriter writer;
-    private BufferedReader reader;
+    private final Pair<PrintWriter, BufferedReader> serverComms;
     private int rank;
     private int points;
 
-    public Player(String username, Socket socket) {
+    public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms) {
         this.username = username;
         this.socket = socket;
-
-        try {
-            this.writer = new PrintWriter(this.socket.getOutputStream(), true);
-            this.reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
-
-            System.out.println(this.username + " connected");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        this.serverComms = serverComms;
     }
 
-    public PrintWriter getWriter() {
-        return this.writer;
+    public PrintWriter getServerWriter() {
+        return this.serverComms.getFirst();
     }
 
-    public BufferedReader getReader() {
-        return this.reader;
+    public BufferedReader getServerReader() {
+        return this.serverComms.getSecond();
     }
 
     public Socket getSocket() { return this.socket; }

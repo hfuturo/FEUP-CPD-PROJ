@@ -29,29 +29,41 @@ public class Server {
         this.clients = new HashMap<>();
     }
 
-    private void addPlayerToQueue(Player player, PrintWriter writer, BufferedReader reader) {
+    private void addPlayerToQueue(Player player) {
         this.waiting_players_lock.lock();
-
         this.waiting_players.add(player);
         System.out.println(player.getUsername() + " entered waiting queue.");
         this.waiting_players_lock.unlock();
+    }
 
-        if (this.waiting_players.size() == 2) {
-            this.waiting_players.forEach((p) -> writer.println(p.getUsername()));
+    private void startGame() {
+        this.waiting_players_lock.lock();
+
+        if (this.waiting_players.size() >= Game.PLAYERS_REQUIRED) {
+            List<Player> players = new ArrayList<>();
+
+            for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
+                Player player = this.waiting_players.remove(0);
+                this.sendMessage(player.getUsername(), "GAME STARTING SOON");
+                players.add(player);
+            }
+
+            this.waiting_players_lock.unlock();
+
+            Game game = new Game(players);
+            game.run();
         }
         else {
-            System.out.println("Waiting for game to start...");
-            while (this.waiting_players.size() != 2) {}
-            System.out.println("SAI");
+            this.waiting_players_lock.unlock();
         }
     }
 
-    private Player authenticateClient(Socket socket, PrintWriter writer, BufferedReader reader) {
+    private Player authenticateClient(Socket socket, PrintWriter server_writer, BufferedReader server_reader) {
         try {
 
             boolean successful = false;
             while (!successful) {
-                String command = reader.readLine();
+                String command = server_reader.readLine();
                 System.out.println("Received command: " + command);
 
                 String[] tokens = command.split(";");
@@ -69,16 +81,18 @@ public class Server {
                 if (successful) {
                     if (clients.containsKey(username)) {
                         successful = false;
-                        writer.println(operation + " error (User is already logged in)");
+                        server_writer.println(operation + " error (User is already logged in)");
                     }
                     else {
-                        clients.put(username, new Pair<>(writer, reader));
-                        writer.println(operation + " successful");
-                        return new Player(username, socket);
+                        System.out.println(username + " connected");
+                        Pair<PrintWriter, BufferedReader> commsChannels = new Pair<>(server_writer, server_reader);
+                        clients.put(username, commsChannels);
+                        server_writer.println(operation + " successful");
+                        return new Player(username, socket, commsChannels);
                     }
                 }
                 else {
-                    writer.println(operation + " error");
+                    server_writer.println(operation + " error");
                 }
             }
         } catch (Exception e) {
@@ -87,6 +101,18 @@ public class Server {
         }
 
         return null;
+    }
+
+    public void sendMessage(String username, String message) {
+        this.clients.get(username).getFirst().println(message);
+    }
+
+    public String receiveMessage(String username) {
+        try {
+            return this.clients.get(username).getSecond().readLine();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void start() {
@@ -101,7 +127,10 @@ public class Server {
                 BufferedReader server_reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 Thread.ofVirtual().start(() -> {
                     Player player = this.authenticateClient(socket, server_writer, server_reader);
-                    this.addPlayerToQueue(player, server_writer, server_reader);
+                    this.addPlayerToQueue(player);
+                    while (true) {
+                        this.startGame();
+                    }
                 });
             }
         } catch (Exception e) {
