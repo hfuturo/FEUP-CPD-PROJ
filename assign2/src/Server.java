@@ -11,6 +11,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
 
+    public final static String GAME_STARTING = "GAME_START";
     private final String hostname;
     private final int port;
     private final List<Player> waiting_players;
@@ -45,12 +46,12 @@ public class Server {
 
             for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
                 Player player = this.waiting_players.remove(0);
-                this.sendMessage(player.getUsername(), "GAME STARTING SOON");
                 players.add(player);
             }
 
             this.waiting_players_lock.unlock();
 
+            players.forEach(player -> this.sendMessage(player.getUsername(), Server.GAME_STARTING));
             Game game = new Game(players);
             game.run();
         }

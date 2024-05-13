@@ -1,5 +1,8 @@
+import Game.Game;
+
 import java.net.*;
 import java.io.*;
+import java.util.Scanner;
 
 public class Client {
 
@@ -16,13 +19,45 @@ public class Client {
     private void listen() {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
                 PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
+
             while (true) {
                 String response = reader.readLine();
-                System.out.println("received from server: " + response);
-                writer.println("Okay chief!");
+                switch (response) {
+                    case Server.GAME_STARTING -> this.inGame(writer, reader);
+                }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void inGame(PrintWriter writer, BufferedReader reader) {
+        while (true) {
+            try {
+                String response = reader.readLine();
+                System.out.println("response: " + response);
+                if (response.equals(Game.FINISH_GAME)) return;
+
+                String[] tokens = response.split(",");
+                for (String token : tokens) {
+                    System.out.println(token);
+                }
+
+                Scanner scanner = new Scanner(System.in);
+                String message;
+                while (true) {
+                    System.out.print("Message: ");
+                    message = scanner.nextLine();
+                    if (message.length() == 5) break;
+                    System.out.println("Word must have 5 characters.");
+                }
+
+                writer.println(message);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 

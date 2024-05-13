@@ -4,6 +4,8 @@ import utils.Pair;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Player {
 
@@ -11,12 +13,13 @@ public class Player {
     private final Socket socket;
     private final Pair<PrintWriter, BufferedReader> serverComms;
     private int rank;
-    private int points;
+    private List<String> wordsUsed;
 
     public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms) {
         this.username = username;
         this.socket = socket;
         this.serverComms = serverComms;
+        this.wordsUsed = new ArrayList<>();
     }
 
     public PrintWriter getServerWriter() {
@@ -37,15 +40,15 @@ public class Player {
         return this.rank;
     }
 
-    public int getPoints() {
-        return this.points;
-    }
-
     public void setRank(int rank) {
         this.rank = rank;
     }
 
-    public void setPoints(int points) {
-        this.points = points;
+    public void addWordUsed(String word) {
+        this.wordsUsed.add(word);
+    }
+
+    public List<String> getWordsUsed() {
+        return this.wordsUsed;
     }
 }

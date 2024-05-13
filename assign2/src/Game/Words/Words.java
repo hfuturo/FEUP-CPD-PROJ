@@ -10,6 +10,9 @@ import java.util.Scanner;
 
 public class Words {
 
+    public final static String DEFAULT_COLOR = "\033[0m";
+    public final static String GREEN = "\033[0;32m";
+    public final static String YELLOW = "\033[0;33m";
     private final static String RAW_FILE_PATH = "Game/Words/raw_words.txt";
     private final static String FILE_PATH = "Game/Words/words.txt";
     private final File raw_file;
