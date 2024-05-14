@@ -1,5 +1,8 @@
+import utils.Protocol;
+
 import java.net.*;
 import java.io.*;
+import java.util.Scanner;
 
 public class Client {
 
@@ -14,11 +17,31 @@ public class Client {
     }
 
     private void listen() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
+
             while (true) {
-                String response = reader.readLine();
-                System.out.println(response);
+                String[] command = reader.readLine().split("\\|");
+                String type = command[0] + "|";
+                String content = command[1];
+
+                switch (type) {
+                    case Protocol.INFO -> System.out.println(content);
+                    case Protocol.REQUEST -> {
+                        System.out.println(content);
+                        Scanner scanner = new Scanner(System.in);
+                        String response = scanner.nextLine();
+                        writer.println(response);
+                    }
+                    case Protocol.TERMINATE -> {
+                        System.out.println(content);
+                        reader.close();
+                        writer.close();
+                        return;
+                    }
+                }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
