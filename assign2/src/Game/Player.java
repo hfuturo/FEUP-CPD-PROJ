@@ -13,7 +13,7 @@ public class Player {
     private final Socket socket;
     private final Pair<PrintWriter, BufferedReader> serverComms;
     private int rank;
-    private List<String> wordsUsed;
+    private final List<String> wordsUsed;
 
     public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms) {
         this.username = username;
@@ -50,5 +50,9 @@ public class Player {
 
     public List<String> getWordsUsed() {
         return this.wordsUsed;
+    }
+
+    public boolean equals(Player player) {
+        return this.getUsername().equals(player.getUsername());
     }
 }

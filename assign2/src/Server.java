@@ -1,5 +1,6 @@
 import Game.*;
 import utils.Pair;
+import utils.Protocol;
 
 import java.io.*;
 import java.net.*;
@@ -10,8 +11,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
-
-    public final static String GAME_STARTING = "GAME_START";
     private final String hostname;
     private final int port;
     private final List<Player> waiting_players;
@@ -51,7 +50,7 @@ public class Server {
 
             this.waiting_players_lock.unlock();
 
-            players.forEach(player -> this.sendMessage(player.getUsername(), Server.GAME_STARTING));
+            players.forEach(player -> this.sendMessage(player.getUsername(), Protocol.INFO, "Game is about to start!"));
             Game game = new Game(players);
             game.run();
         }
@@ -105,8 +104,8 @@ public class Server {
         return null;
     }
 
-    public void sendMessage(String username, String message) {
-        this.clients.get(username).getFirst().println(message);
+    public void sendMessage(String username, String protocol, String message) {
+        this.clients.get(username).getFirst().println(protocol + message);
     }
 
     public String receiveMessage(String username) {
