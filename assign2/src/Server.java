@@ -1,4 +1,4 @@
-import Game.*;
+import game.*;
 import utils.Pair;
 import utils.Protocol;
 

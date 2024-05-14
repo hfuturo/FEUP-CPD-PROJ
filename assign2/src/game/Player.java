@@ -1,4 +1,4 @@
-package Game;
+package game;
 
 import utils.Pair;
 
@@ -50,6 +50,10 @@ public class Player {
 
     public List<String> getWordsUsed() {
         return this.wordsUsed;
+    }
+
+    public void resetUsedWords() {
+        this.wordsUsed.clear();
     }
 
     public boolean equals(Player player) {

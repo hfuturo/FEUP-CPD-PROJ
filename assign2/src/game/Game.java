@@ -1,6 +1,6 @@
-package Game;
+package game;
 
-import Game.Words.Words;
+import game.words.Words;
 import utils.Protocol;
 
 import java.util.ArrayList;
@@ -72,6 +72,7 @@ public class Game {
                     player.getWordsUsed().forEach((used_word) -> this.sendMessage(player, Protocol.INFO, used_word));
                 }
 
+                player.resetUsedWords();
                 System.out.println(player.getUsername() + " left");
 
             });
