@@ -3,6 +3,7 @@ package Game;
 import Game.Words.Words;
 import utils.Protocol;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -10,34 +11,36 @@ public class Game {
     public static final int PLAYERS_REQUIRED = 2;
     private final List<Player> players;
     private final ReentrantLock playersLock;
-    private Words words;
     private String word;
     private boolean stop;
 
     public Game(List<Player> players) {
         this.players = players;
         this.playersLock = new ReentrantLock();
+        this.stop = false;
 
+        Words words;
         try {
-            this.words = new Words();
+            words = new Words();
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Error creating file");
             return;
         }
 
-        this.stop = false;
-        this.word = this.words.getRandomWord();
+        this.word = words.getRandomWord();
         System.out.println(this.word);
     }
 
     public void run() {
 
+        List<Thread> threads = new ArrayList<>();
+
         // lança um thread por cada jogador
         for (Player player : players) {
             this.sendMessage(player, Protocol.INFO, "Game started!");
 
-            Thread.ofVirtual().start(() -> {
+            Thread thread = Thread.ofVirtual().start(() -> {
                 while (true) {
 
                     String word = this.getPlayerWord(player);
@@ -53,7 +56,7 @@ public class Game {
                         this.players.forEach(p ->  {
                             this.sendMessage(p, Protocol.INFO, "Game ended!");
                             this.sendMessage(p, Protocol.INFO, p.equals(player) ? "Yow won!" : "You lost");
-                            this.sendMessage(p, Protocol.INFO, "The word was " + this.word);
+                            this.sendMessage(p, Protocol.INFO, "The word was '" + this.word + "'");
                         });
                         this.stop = true;
                         this.playersLock.unlock();
@@ -70,8 +73,21 @@ public class Game {
                 }
 
                 System.out.println(player.getUsername() + " left");
+
             });
+
+            threads.add(thread);
         }
+
+        // espera que threads acabem
+        threads.forEach(thread -> {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
     }
 
     private String getPlayerWord(Player player) {
@@ -84,7 +100,7 @@ public class Game {
             if (word == null) continue;
             word = word.trim().toLowerCase();
 
-            System.out.println("received: " + word.toString());
+            System.out.println("received: " + word);
 
             if (word.length() == 5)
                 return word;

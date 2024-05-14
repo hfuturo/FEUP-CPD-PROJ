@@ -33,6 +33,12 @@ public class Client {
                         String response = scanner.nextLine();
                         writer.println(response);
                     }
+                    case Protocol.TERMINATE -> {
+                        System.out.println(content);
+                        reader.close();
+                        writer.close();
+                        return;
+                    }
                 }
             }
 
