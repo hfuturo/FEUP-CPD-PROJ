@@ -37,7 +37,7 @@ public class Server {
     }
 
     private void addPlayerToQueue(Player player) {
-        Server.sendMessage(player, Protocol.INFO, "Entered waiting queue");
+        this.sendMessage(player, Protocol.INFO, "Entered waiting queue");
         this.waiting_players_lock.lock();
         this.waiting_players.add(player);
         System.out.println(player.getUsername() + " entered waiting queue.");
@@ -45,7 +45,7 @@ public class Server {
     }
 
     private void disconnectClient(Player player) {
-        Server.sendMessage(player, Protocol.TERMINATE, "Terminating connection.");
+        this.sendMessage(player, Protocol.TERMINATE, "Terminating connection.");
 
         this.waiting_players_lock.lock();
         this.waiting_players.remove(player);
@@ -68,7 +68,7 @@ public class Server {
         if (!player_finished_playing)
             return;
 
-        Server.sendMessage(player, Protocol.REQUEST, "Do you want to play again? (y/n)");
+        this.sendMessage(player, Protocol.REQUEST, "Do you want to play again? (y/n)");
         String response;
         while (true) {
             response = this.receiveMessage(player);
@@ -78,7 +78,7 @@ public class Server {
             response = response.trim().toLowerCase();
 
             if (!response.equals("y") && !response.equals("n")) {
-                Server.sendMessage(player, Protocol.REQUEST, "Input must be 'y' or 'n'");
+                this.sendMessage(player, Protocol.REQUEST, "Input must be 'y' or 'n'");
                 continue;
             }
 
@@ -112,7 +112,7 @@ public class Server {
 
             this.waiting_players_lock.unlock();
 
-            players.forEach(player -> Server.sendMessage(player, Protocol.INFO, "Game is about to start!"));
+            players.forEach(player -> this.sendMessage(player, Protocol.INFO, "Game is about to start!"));
             Game game = new Game(players);
             game.run();
 
@@ -169,7 +169,7 @@ public class Server {
         return null;
     }
 
-    private static void sendMessage(Player player, String protocol, String message) {
+    private void sendMessage(Player player, String protocol, String message) {
         player.getServerWriter().println(protocol + message);
     }
 
