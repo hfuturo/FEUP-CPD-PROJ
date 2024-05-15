@@ -15,10 +15,8 @@ public class Server {
     private final int port;
     private final List<Player> waiting_players;
     private final Lock waiting_players_lock;
-
     private final List<Player> waiting_players_rank;
     private final Lock waiting_players_rank_lock;
-
     private final List<Player> players_finished_game;
     private final Lock players_finished_lock;
     private final Database database;
@@ -44,22 +42,18 @@ public class Server {
         this.clients_lock = new ReentrantLock();
     }
 
-    private void addPlayerToQueue(Player player, Integer mode) {
-        if (mode != null && mode.equals(0)) {
-            this.sendMessage(player, Protocol.INFO, "Entered waiting queue for simple mode");
+    private void addPlayerToQueue(Player player, int mode) {
+        this.sendMessage(player, Protocol.INFO, "Entered " + (mode == 0 ? "normal" : "ranked") + " waiting queue");
+        if (mode == 0) {
             this.waiting_players_lock.lock();
             this.waiting_players.add(player);
             System.out.println(player.getUsername() + " entered waiting queue for simple mode.");
             this.waiting_players_lock.unlock();
-
-        } else if(mode != null && mode.equals(1)) {
-            this.sendMessage(player, Protocol.INFO, "Entered waiting queue for rank mode");
-            //Se descomentar isto, já só aparece o "Which mode do you want to play? [0]Simple mode or [1]Rank mode" para o 1º cliente
-//            this.waiting_players_rank_lock.lock();
-//            this.waiting_players_rank.add(player);
-//            System.out.println(player.getUsername() + " entered waiting queue for rank mode.");
-//            this.waiting_players_rank_lock.unlock();
-
+        }
+        else {
+            this.waiting_players_rank_lock.lock();
+            System.out.println(player.getUsername() + " entered waiting queue for rank mode.");
+            this.waiting_players_rank_lock.unlock();
         }
     }
 
@@ -111,7 +105,7 @@ public class Server {
         this.players_finished_lock.unlock();
 
         if (response.equals("y")) {
-            this.addPlayerToQueue(player,null);
+            this.addPlayerToQueue(player,0);
         }
         else {
             this.database.updateRankDatabase(player.getRank(), player.getUsername());
@@ -192,7 +186,7 @@ public class Server {
     }
 
     private void sendMessage(Player player, String protocol, String message) {
-        player.getServerWriter().println(protocol + message);
+        player.getServerWriter().println(protocol + message + "\n");
     }
 
     private String receiveMessage(Player player) {
@@ -226,6 +220,25 @@ public class Server {
         }
     }
 
+    private int getClientGameMode(Player player) {
+        this.sendMessage(player, Protocol.INFO, "Which mode do tou want to play?");
+        this.sendMessage(player, Protocol.INFO, "[0] Simple mode");
+        this.sendMessage(player, Protocol.REQUEST, "[1] Ranked mode");
+
+        while (true) {
+            String input = this.receiveMessage(player);
+            if (input == null) continue;
+
+            input = input.trim().toLowerCase();
+            if (!input.equals("0") && !input.equals("1")) {
+                this.sendMessage(player, Protocol.REQUEST, "Input must be 0 or 1");
+                continue;
+            }
+
+            return Integer.parseInt(input);
+        }
+    }
+
     private void start() {
         try {
             this.serverSocket = new ServerSocket(this.port);
@@ -238,29 +251,8 @@ public class Server {
                 BufferedReader server_reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 Thread.ofVirtual().start(() -> {
                     Player player = this.authenticateClient(socket, server_writer, server_reader);
-
-                    this.sendMessage(player, Protocol.REQUEST, "Which mode do you want to play? [0]Simple mode or [1]Rank mode");
-
-                    // Aguardar a resposta do cliente
-                    Integer response;
-                    while (true) {
-                        String input = this.receiveMessage(player);
-                        if (input == null || !input.matches("\\d+")) {
-                            this.sendMessage(player, Protocol.REQUEST, "Input must be 0 or 1");
-                            continue;
-                        }
-
-                        response = Integer.valueOf(input);
-
-                        if (response != 0 && response != 1) {
-                            this.sendMessage(player, Protocol.REQUEST, "Input must be 0 or 1");
-                            continue;
-                        }
-
-                        break;
-                    }
-
-                    this.addPlayerToQueue(player,response);
+                    int mode = this.getClientGameMode(player);
+                    this.addPlayerToQueue(player, mode);
                     this.handlePlayer(player);
                 });
             }

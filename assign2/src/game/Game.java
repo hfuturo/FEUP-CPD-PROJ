@@ -4,17 +4,16 @@ import game.words.Words;
 import utils.Pair;
 import utils.Protocol;
 
-import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Game {
     public static final int PLAYERS_REQUIRED = 2;
     private final static double MAX_RANK_GAIN = 100;
     private final List<Player> players;
-    private final ReentrantLock playersLock;
+    private final Lock playersLock;
     private String word;
     private boolean stop;
 
@@ -122,7 +121,6 @@ public class Game {
     }
 
     private double updateRanks(Player winner, Player loser) {
-        DecimalFormat df = new DecimalFormat("#.##");
         // update a si mesmo
         if (winner.equals(loser)) {
             List<Double> allProbabilities = new ArrayList<>();
@@ -142,14 +140,15 @@ public class Game {
 
                 double variation = sum / allProbabilities.size();
                 double newRank = winner.getRank() + MAX_RANK_GAIN * variation;
-                return Double.parseDouble(df.format(newRank));
+                System.out.println(newRank);
+                return Math.round(newRank);
 
         }
         else {
             // probabilidade de loser ganhar
             double variation = this.calculateRank(loser, winner);
             double newRank = loser.getRank() - MAX_RANK_GAIN * variation;
-            return Double.parseDouble(df.format(newRank));
+            return Math.round(newRank);
         }
 
     }
