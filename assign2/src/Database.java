@@ -3,6 +3,7 @@ import utils.Pair;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.Scanner;
 
@@ -89,6 +90,34 @@ public class Database {
         }
 
         return -1;
+    }
+
+    public void updateRankDatabase(double rank, String username) {
+        try {
+            File tempFile = new File(Database.FILE_PATH + ".temp");
+            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
+            Scanner scanner = new Scanner(this.file);
+
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                String[] tokens = line.split(",");
+
+                if (tokens[0].equals(username)) {
+                    tokens[2] = String.valueOf(rank);
+                    line = String.join(",", tokens);
+                }
+
+                writer.write(line + "\n");
+            }
+
+            writer.close();
+            scanner.close();
+
+            this.file.delete();
+            tempFile.renameTo(this.file);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private String hash(String input) {

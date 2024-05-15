@@ -94,6 +94,7 @@ public class Server {
             this.addPlayerToQueue(player);
         }
         else {
+            this.database.updateRankDatabase(player.getRank(), player.getUsername());
             this.disconnectClient(player);
         }
 
