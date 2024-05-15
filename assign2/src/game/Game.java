@@ -129,7 +129,8 @@ public class Game {
             System.out.println("Entrou no winner igual ao loser");
             for (Player p : players) {
                 if (!p.equals(winner)) {
-                    double probability = calculateRank(winner, p);
+                    //Probabilidade do winner perder
+                    double probability = 1 - calculateRank(winner, p);
                     allProbabilities.add(probability);
                 }
             }
@@ -145,8 +146,8 @@ public class Game {
 
         }
         else {
-            // probabilidade de loser perder
-            double variation = 1 - this.calculateRank(loser, winner);
+            // probabilidade de loser ganhar
+            double variation = this.calculateRank(loser, winner);
             double newRank = loser.getRank() - MAX_RANK_GAIN * variation;
             return Double.parseDouble(df.format(newRank));
         }
