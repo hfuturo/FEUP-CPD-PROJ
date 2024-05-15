@@ -12,13 +12,14 @@ public class Player {
     private final String username;
     private final Socket socket;
     private final Pair<PrintWriter, BufferedReader> serverComms;
-    private int rank;
+    private double rank;
     private final List<String> wordsUsed;
 
-    public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms) {
+    public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms, double rank) {
         this.username = username;
         this.socket = socket;
         this.serverComms = serverComms;
+        this.rank = rank;
         this.wordsUsed = new ArrayList<>();
     }
 
@@ -36,11 +37,11 @@ public class Player {
         return this.username;
     }
 
-    public int getRank() {
+    public double getRank() {
         return this.rank;
     }
 
-    public void setRank(int rank) {
+    public void setRank(double rank) {
         this.rank = rank;
     }
 

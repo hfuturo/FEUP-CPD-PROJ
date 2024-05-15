@@ -107,12 +107,17 @@ public class Server {
 
             for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
                 Player player = this.waiting_players.remove(0);
+
                 players.add(player);
             }
 
             this.waiting_players_lock.unlock();
 
-            players.forEach(player -> this.sendMessage(player, Protocol.INFO, "Game is about to start!"));
+            players.forEach(player -> {
+                this.sendMessage(player, Protocol.INFO, "Game is about to start!");
+                this.sendMessage(player, Protocol.INFO, "RANK " + player.getRank());
+
+            });
             Game game = new Game(players);
             game.run();
 
@@ -141,8 +146,8 @@ public class Server {
                 successful = operation.equals("login") ?
                         this.database.authenticateUser(username, password) :
                         this.database.registerUser(username, password);
+                double rank = successful ? this.database.getRankFromUser(username) : -1;
                 this.database_lock.unlock();
-
 
                 if (successful) {
                     if (clients.containsKey(username)) {
@@ -154,7 +159,7 @@ public class Server {
                         Pair<PrintWriter, BufferedReader> commsChannels = new Pair<>(server_writer, server_reader);
                         clients.put(username, commsChannels);
                         server_writer.println(operation + " successful");
-                        return new Player(username, socket, commsChannels);
+                        return new Player(username, socket, commsChannels, rank);
                     }
                 }
                 else {
