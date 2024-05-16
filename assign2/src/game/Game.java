@@ -12,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Game {
     public static final int PLAYERS_REQUIRED = 2;
     public enum Modes { NORMAL, RANKED }
-    private final static double MAX_RANK_GAIN = 50;
+    private static final double MAX_RANK_GAIN = 50;
     private final List<Player> players;
     private final Lock playersLock;
     private String word;
