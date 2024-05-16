@@ -11,12 +11,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Game {
     public static final int PLAYERS_REQUIRED = 2;
-    public enum Modes {
-        NORMAL,
-        RANKED
-    }
-
-    private final static double MAX_RANK_GAIN = 100;
+    public enum Modes { NORMAL, RANKED }
+    private final static double MAX_RANK_GAIN = 50;
     private final List<Player> players;
     private final Lock playersLock;
     private String word;
@@ -130,8 +126,6 @@ public class Game {
         //Atualiza os novos ranks
         newRankPlayers.forEach(pair -> {
             double rank = pair.getSecond();
-            System.out.println("loser rank " + (rank - pair.getFirst().getRank()));
-            System.out.println("loser new rank " + rank);
             pair.getFirst().setRank(rank);
         });
     }
@@ -140,7 +134,6 @@ public class Game {
         // update a si mesmo
         if (winner.equals(loser)) {
             List<Double> allProbabilities = new ArrayList<>();
-            System.out.println("Entrou no winner igual ao loser");
             for (Player p : players) {
                 if (!p.equals(winner)) {
                     //Probabilidade do winner perder

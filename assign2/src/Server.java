@@ -12,9 +12,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
     // server
-    private final String hostname;
     private final int port;
-    private ServerSocket serverSocket;
+    private static final int GAP_INCREMENT = 5;
+    private static final int INITIAL_GAP = 10;
+    private static final int GAP_INCREMENT_TIMER = 5;
 
     // queues
     private final List<Player> waiting_normal;
@@ -34,9 +35,8 @@ public class Server {
     private final HashMap<String, Pair<PrintWriter, BufferedReader>> clients;
     private final Lock clients_lock;
 
-    public Server(String hostname, int port) {
+    public Server(int port) {
         // server
-        this.hostname = hostname;
         this.port = port;
 
         // waiting queue
@@ -58,20 +58,28 @@ public class Server {
         this.clients_lock = new ReentrantLock();
     }
 
-    private void addPlayerToQueue(Player player, int mode) {
-        this.sendMessage(player, Protocol.INFO, "Entered " + (mode == 0 ? "normal" : "ranked") + " waiting queue");
+    private void addPlayerToNormalQueue(Player player) {
+        this.sendMessage(player, Protocol.INFO, "Entered normal waiting queue");
 
+        this.waiting_normal_lock.lock();
+        this.waiting_normal.add(player);
+        this.waiting_normal_lock.unlock();
+    }
+
+    private void addPlayerToRankedQueue(Player player) {
+        this.sendMessage(player, Protocol.INFO, "Entered ranked waiting queue");
+
+        this.waiting_ranked_lock.lock();
+        this.waiting_ranked.add(player);
+        this.waiting_ranked_lock.unlock();
+    }
+
+    private void addPlayerToQueue(Player player, int mode) {
         if (mode == Game.Modes.NORMAL.ordinal()) {
-            this.waiting_normal_lock.lock();
-            this.waiting_normal.add(player);
-            System.out.println(player.getUsername() + " entered waiting queue for simple mode.");
-            this.waiting_normal_lock.unlock();
+            this.addPlayerToNormalQueue(player);
         }
         else {
-            this.waiting_ranked_lock.lock();
-            this.waiting_ranked.add(player);
-            System.out.println(player.getUsername() + " entered waiting queue for rank mode.");
-            this.waiting_ranked_lock.unlock();
+            this.addPlayerToRankedQueue(player);
         }
     }
 
@@ -147,50 +155,80 @@ public class Server {
 
     }
 
-    private void startGame(int mode) {
+    private void startRankedGame(Player player, int time_elapsed) {
+        this.waiting_ranked_lock.lock();
+        System.out.println("time_elapsed: " + time_elapsed);
+        System.out.println("gap: " + (Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT));
 
-        if (mode == Game.Modes.NORMAL.ordinal()) {
-            this.waiting_normal_lock.lock();
-        } else {
-            this.waiting_ranked_lock.lock();
+        if (this.waiting_ranked.size() >= Game.PLAYERS_REQUIRED) {
+            List<Player> players = new ArrayList<>();
+            players.add(player);
+
+            for (Player p : this.waiting_ranked) {
+                if (!player.equals(p) && Math.abs(player.getRank() - p.getRank()) <= Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT) {
+                    players.add(p);
+                }
+
+                if (players.size() == Game.PLAYERS_REQUIRED) {
+                    for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
+                        this.waiting_ranked.remove(players.get(i));
+                    }
+                    break;
+                }
+            }
+
+            this.waiting_ranked_lock.unlock();
+
+            if (players.size() != Game.PLAYERS_REQUIRED) {
+                return;
+            }
+
+
+            players.forEach(p -> this.sendMessage(p, Protocol.INFO, "Game is about to start!"));
+            Game game = new Game(players, Game.Modes.RANKED.ordinal());
+            game.run();
+
+            this.finished_ranked_lock.lock();
+            this.finished_ranked.addAll(players);
+            this.finished_ranked_lock.unlock();
         }
+        else {
+            this.waiting_ranked_lock.unlock();
+        }
+    }
 
-        int size = mode == Game.Modes.NORMAL.ordinal() ? this.waiting_normal.size() : this.waiting_ranked.size();
-        if (size >= Game.PLAYERS_REQUIRED) {
+    private void startNormalGame() {
+        this.waiting_normal_lock.lock();
+
+        if (this.waiting_normal.size() >= Game.PLAYERS_REQUIRED) {
             List<Player> players = new ArrayList<>();
 
             for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
-                Player player = mode == Game.Modes.NORMAL.ordinal() ? this.waiting_normal.remove(0) : this.waiting_ranked.remove(0);
-
-                players.add(player);
+                players.add(this.waiting_normal.remove(0));
             }
 
-            if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.waiting_normal_lock.unlock();
-            } else {
-                this.waiting_ranked_lock.unlock();
-            }
+            this.waiting_normal_lock.unlock();
 
             players.forEach(player -> this.sendMessage(player, Protocol.INFO, "Game is about to start!"));
-            Game game = new Game(players, mode);
+            Game game = new Game(players, Game.Modes.NORMAL.ordinal());
             game.run();
 
-            if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.finished_normal_lock.lock();
-                this.finished_normal.addAll(players);
-                this.finished_normal_lock.unlock();
-            } else {
-                this.finished_ranked_lock.lock();
-                this.finished_ranked.addAll(players);
-                this.finished_ranked_lock.unlock();
-            }
+            this.finished_normal_lock.lock();
+            this.finished_normal.addAll(players);
+            this.finished_normal_lock.unlock();
         }
         else {
-            if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.waiting_normal_lock.unlock();
-            } else {
-                this.waiting_ranked_lock.unlock();
-            }
+            this.waiting_normal_lock.unlock();
+        }
+    }
+
+
+
+    private void startGame(Player player, int mode, int time_elapsed) {
+        if (mode == Game.Modes.NORMAL.ordinal()) {
+            this.startNormalGame();
+        } else {
+            this.startRankedGame(player, time_elapsed);
         }
     }
 
@@ -251,6 +289,8 @@ public class Server {
     }
 
     private void handlePlayer(Player player, int mode) {
+        int time_elapsed = 0;
+
         while (true) {
             boolean player_in_queue;
 
@@ -267,7 +307,7 @@ public class Server {
 
             // se player na queue, tenta começar jogo
             if (player_in_queue) {
-                this.startGame(mode);
+                this.startGame(player, mode, time_elapsed);
             }
             else {
                 this.handleFinishedPlayers(player, mode);
@@ -276,6 +316,7 @@ public class Server {
             // espera 1sec e tenta novamente
             try {
                 Thread.sleep(1000);
+                time_elapsed++;
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -302,8 +343,7 @@ public class Server {
     }
 
     private void start() {
-        try {
-            this.serverSocket = new ServerSocket(this.port);
+        try (ServerSocket serverSocket = new ServerSocket(this.port)) {
 
             System.out.println("Server is listening on port " + this.port);
 
@@ -324,13 +364,12 @@ public class Server {
     }
 
     public static void main(String[] args) {
-        if (args.length < 1 || args.length > 3) return;
+        if (args.length != 1) return;
 
         int port = Integer.parseInt(args[0]);
-        String hostname = args.length == 1 ? "localhost" : args[1];
 
         try {
-            Server server = new Server(hostname, port);
+            Server server = new Server(port);
             server.start();
         } catch (Exception e) {
             e.printStackTrace();
