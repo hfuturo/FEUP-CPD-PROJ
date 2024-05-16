@@ -17,16 +17,16 @@ public class Server {
     private ServerSocket serverSocket;
 
     // queues
-    private final List<Player> waiting_players;
-    private final Lock waiting_players_lock;
-    private final List<Player> waiting_players_rank;
-    private final Lock waiting_players_rank_lock;
+    private final List<Player> waiting_normal;
+    private final Lock waiting_normal_lock;
+    private final List<Player> waiting_ranked;
+    private final Lock waiting_ranked_lock;
 
     // finished queue
-    private final List<Player> players_finished_game;
-    private final Lock players_finished_lock;
-    private final List<Player> players_finished_rank;
-    private final Lock players_finished_rank_lock;
+    private final List<Player> finished_normal;
+    private final Lock finished_normal_lock;
+    private final List<Player> finished_ranked;
+    private final Lock finished_ranked_lock;
 
     // db
     private final Database database;
@@ -40,16 +40,16 @@ public class Server {
         this.port = port;
 
         // waiting queue
-        this.waiting_players = new ArrayList<>();
-        this.waiting_players_lock = new ReentrantLock();
-        this.waiting_players_rank = new ArrayList<>();
-        this.waiting_players_rank_lock = new ReentrantLock();
+        this.waiting_normal = new ArrayList<>();
+        this.waiting_normal_lock = new ReentrantLock();
+        this.waiting_ranked = new ArrayList<>();
+        this.waiting_ranked_lock = new ReentrantLock();
 
         // finished queue
-        this.players_finished_game = new ArrayList<>();
-        this.players_finished_lock = new ReentrantLock();
-        this.players_finished_rank = new ArrayList<>();
-        this.players_finished_rank_lock = new ReentrantLock();
+        this.finished_normal = new ArrayList<>();
+        this.finished_normal_lock = new ReentrantLock();
+        this.finished_ranked = new ArrayList<>();
+        this.finished_ranked_lock = new ReentrantLock();
 
         // db
         this.database_lock = new ReentrantLock();
@@ -62,16 +62,16 @@ public class Server {
         this.sendMessage(player, Protocol.INFO, "Entered " + (mode == 0 ? "normal" : "ranked") + " waiting queue");
 
         if (mode == Game.Modes.NORMAL.ordinal()) {
-            this.waiting_players_lock.lock();
-            this.waiting_players.add(player);
+            this.waiting_normal_lock.lock();
+            this.waiting_normal.add(player);
             System.out.println(player.getUsername() + " entered waiting queue for simple mode.");
-            this.waiting_players_lock.unlock();
+            this.waiting_normal_lock.unlock();
         }
         else {
-            this.waiting_players_rank_lock.lock();
-            this.waiting_players_rank.add(player);
+            this.waiting_ranked_lock.lock();
+            this.waiting_ranked.add(player);
             System.out.println(player.getUsername() + " entered waiting queue for rank mode.");
-            this.waiting_players_rank_lock.unlock();
+            this.waiting_ranked_lock.unlock();
         }
     }
 
@@ -79,13 +79,13 @@ public class Server {
     private void disconnectClient(Player player) {
         this.sendMessage(player, Protocol.TERMINATE, "Terminating connection.");
 
-        this.players_finished_lock.lock();
-        this.players_finished_game.remove(player);
-        this.players_finished_lock.unlock();
+        this.finished_normal_lock.lock();
+        this.finished_normal.remove(player);
+        this.finished_normal_lock.unlock();
 
-        this.players_finished_rank_lock.lock();
-        this.players_finished_rank.remove(player);
-        this.players_finished_rank_lock.unlock();
+        this.finished_ranked_lock.lock();
+        this.finished_ranked.remove(player);
+        this.finished_ranked_lock.unlock();
 
         this.clients_lock.lock();
         this.clients.remove(player.getUsername());
@@ -95,14 +95,14 @@ public class Server {
     private void handleFinishedPlayers(Player player, int mode) {
         boolean player_finished_playing;
         if (mode == Game.Modes.NORMAL.ordinal()) {
-            this.players_finished_lock.lock();
-            player_finished_playing = this.players_finished_game.contains(player);
-            this.players_finished_lock.unlock();
+            this.finished_normal_lock.lock();
+            player_finished_playing = this.finished_normal.contains(player);
+            this.finished_normal_lock.unlock();
         }
         else {
-            this.players_finished_rank_lock.lock();
-            player_finished_playing = this.players_finished_rank.contains(player);
-            this.players_finished_rank_lock.unlock();
+            this.finished_ranked_lock.lock();
+            player_finished_playing = this.finished_ranked.contains(player);
+            this.finished_ranked_lock.unlock();
         }
 
         if (!player_finished_playing)
@@ -127,14 +127,14 @@ public class Server {
 
 
         if (mode == Game.Modes.NORMAL.ordinal()) {
-            this.players_finished_lock.lock();
-            this.players_finished_game.remove(player);
-            this.players_finished_lock.unlock();
+            this.finished_normal_lock.lock();
+            this.finished_normal.remove(player);
+            this.finished_normal_lock.unlock();
         }
         else {
-            this.players_finished_rank_lock.lock();
-            this.players_finished_rank.remove(player);
-            this.players_finished_rank_lock.unlock();
+            this.finished_ranked_lock.lock();
+            this.finished_ranked.remove(player);
+            this.finished_ranked_lock.unlock();
         }
 
         if (response.equals("y")) {
@@ -150,25 +150,25 @@ public class Server {
     private void startGame(int mode) {
 
         if (mode == Game.Modes.NORMAL.ordinal()) {
-            this.waiting_players_lock.lock();
+            this.waiting_normal_lock.lock();
         } else {
-            this.waiting_players_rank_lock.lock();
+            this.waiting_ranked_lock.lock();
         }
 
-        int size = mode == Game.Modes.NORMAL.ordinal() ? this.waiting_players.size() : this.waiting_players_rank.size();
+        int size = mode == Game.Modes.NORMAL.ordinal() ? this.waiting_normal.size() : this.waiting_ranked.size();
         if (size >= Game.PLAYERS_REQUIRED) {
             List<Player> players = new ArrayList<>();
 
             for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
-                Player player = mode == Game.Modes.NORMAL.ordinal() ? this.waiting_players.remove(0) : this.waiting_players_rank.remove(0);
+                Player player = mode == Game.Modes.NORMAL.ordinal() ? this.waiting_normal.remove(0) : this.waiting_ranked.remove(0);
 
                 players.add(player);
             }
 
             if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.waiting_players_lock.unlock();
+                this.waiting_normal_lock.unlock();
             } else {
-                this.waiting_players_rank_lock.unlock();
+                this.waiting_ranked_lock.unlock();
             }
 
             players.forEach(player -> this.sendMessage(player, Protocol.INFO, "Game is about to start!"));
@@ -176,20 +176,20 @@ public class Server {
             game.run();
 
             if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.players_finished_lock.lock();
-                this.players_finished_game.addAll(players);
-                this.players_finished_lock.unlock();
+                this.finished_normal_lock.lock();
+                this.finished_normal.addAll(players);
+                this.finished_normal_lock.unlock();
             } else {
-                this.players_finished_rank_lock.lock();
-                this.players_finished_rank.addAll(players);
-                this.players_finished_rank_lock.unlock();
+                this.finished_ranked_lock.lock();
+                this.finished_ranked.addAll(players);
+                this.finished_ranked_lock.unlock();
             }
         }
         else {
             if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.waiting_players_lock.unlock();
+                this.waiting_normal_lock.unlock();
             } else {
-                this.waiting_players_rank_lock.unlock();
+                this.waiting_ranked_lock.unlock();
             }
         }
     }
@@ -255,14 +255,14 @@ public class Server {
             boolean player_in_queue;
 
             if (mode == Game.Modes.NORMAL.ordinal()) {
-                this.waiting_players_lock.lock();
-                player_in_queue = this.waiting_players.contains(player);
-                this.waiting_players_lock.unlock();
+                this.waiting_normal_lock.lock();
+                player_in_queue = this.waiting_normal.contains(player);
+                this.waiting_normal_lock.unlock();
             }
             else {
-                this.waiting_players_rank_lock.lock();
-                player_in_queue = this.waiting_players_rank.contains(player);
-                this.waiting_players_rank_lock.unlock();
+                this.waiting_ranked_lock.lock();
+                player_in_queue = this.waiting_ranked.contains(player);
+                this.waiting_ranked_lock.unlock();
             }
 
             // se player na queue, tenta começar jogo

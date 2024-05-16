@@ -107,29 +107,33 @@ public class Game {
         });
 
         if (this.mode == Modes.RANKED.ordinal()) {
-            List<Pair<Player, Double>> newRankPlayers = new ArrayList<>();
-
-            double newWinnerRank = this.updateRank(player, player);
-
-            newRankPlayers.add(new Pair<>(player, newWinnerRank));
-
-            this.players.forEach(p -> {
-                if (!p.equals(player)) {
-                    double playerRank = this.updateRank(player, p);
-                    newRankPlayers.add(new Pair<>(p, playerRank));
-                }
-            });
-
-            //Atualiza os novos ranks
-            newRankPlayers.forEach(pair -> {
-                double rank = pair.getSecond();
-                System.out.println("loser rank " + (rank - pair.getFirst().getRank()));
-                System.out.println("loser new rank " + rank);
-                pair.getFirst().setRank(rank);
-            });
+            this.handleRanks(player);
         }
 
         this.playersLock.unlock();
+    }
+
+    private void handleRanks(Player player) {
+        List<Pair<Player, Double>> newRankPlayers = new ArrayList<>();
+
+        double newWinnerRank = this.updateRank(player, player);
+
+        newRankPlayers.add(new Pair<>(player, newWinnerRank));
+
+        this.players.forEach(p -> {
+            if (!p.equals(player)) {
+                double playerRank = this.updateRank(player, p);
+                newRankPlayers.add(new Pair<>(p, playerRank));
+            }
+        });
+
+        //Atualiza os novos ranks
+        newRankPlayers.forEach(pair -> {
+            double rank = pair.getSecond();
+            System.out.println("loser rank " + (rank - pair.getFirst().getRank()));
+            System.out.println("loser new rank " + rank);
+            pair.getFirst().setRank(rank);
+        });
     }
 
     private double updateRank(Player winner, Player loser) {
@@ -144,17 +148,16 @@ public class Game {
                     allProbabilities.add(probability);
                 }
             }
-                //Calcular a média das probabilidades do winner ganhar a cada um dos outros jogadores
-                double sum = 0.0;
-                for (double probability : allProbabilities) {
-                    sum += probability;
-                }
 
-                double variation = sum / allProbabilities.size();
-                double newRank = winner.getRank() + MAX_RANK_GAIN * variation;
-                System.out.println(newRank);
-                return Math.round(newRank);
+            //Calcular a média das probabilidades do winner ganhar a cada um dos outros jogadores
+            double sum = 0.0;
+            for (double probability : allProbabilities) {
+                sum += probability;
+            }
 
+            double variation = sum / allProbabilities.size();
+            double newRank = winner.getRank() + MAX_RANK_GAIN * variation;
+            return Math.round(newRank);
         }
         else {
             // probabilidade de loser ganhar
@@ -218,7 +221,7 @@ public class Game {
             string.append(word.charAt(i));
         }
 
-        // makes sure we go back to default color
+        // garante que metemos cor default no terminal
         string.append(Words.DEFAULT_COLOR);
 
         return string.toString();
