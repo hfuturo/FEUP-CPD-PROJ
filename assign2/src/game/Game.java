@@ -11,16 +11,23 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Game {
     public static final int PLAYERS_REQUIRED = 2;
+    public enum Modes {
+        NORMAL,
+        RANKED
+    }
+
     private final static double MAX_RANK_GAIN = 100;
     private final List<Player> players;
     private final Lock playersLock;
     private String word;
     private boolean stop;
+    private final int mode;
 
-    public Game(List<Player> players) {
+    public Game(List<Player> players, int mode) {
         this.players = players;
         this.playersLock = new ReentrantLock();
         this.stop = false;
+        this.mode = mode;
 
         Words words;
         try {
@@ -32,7 +39,7 @@ public class Game {
         }
 
         this.word = words.getRandomWord();
-        System.out.println(this.word);
+        System.out.println("Started " + mode + " game with word: " + this.word);
     }
 
     public void run() {
@@ -91,36 +98,41 @@ public class Game {
 
     private void handleWinner(Player player) {
         this.playersLock.lock();
+        this.stop = true;
 
-        List<Pair<String, Double>> newRankPlayers = new ArrayList<>();
-
-        double newWinnerRank = this.updateRanks(player, player);
-
-        newRankPlayers.add(new Pair<>(player.getUsername(), newWinnerRank));
-
-        this.players.forEach(p ->  {
+        this.players.forEach(p -> {
             this.sendMessage(p, Protocol.INFO, "Game ended!");
-            this.sendMessage(p, Protocol.INFO, p.equals(player) ? "Yow won!" : "You lost");
-            if (!p.equals(player)){
-                double playerRank = this.updateRanks(player,p);
-                newRankPlayers.add(new Pair<>(p.getUsername(),playerRank));
-            }
+            this.sendMessage(p, Protocol.INFO, p.equals(player) ? "You won!" : "You lost");
             this.sendMessage(p, Protocol.INFO, "The word was '" + this.word + "'");
         });
 
-        //Atualiza os novos ranks
-        newRankPlayers.forEach(pair -> {
-            String username = pair.getFirst();
-            double rank = pair.getSecond();
-            Player p = this.getPlayer(username);
-            p.setRank(rank);
-        });
+        if (this.mode == Modes.RANKED.ordinal()) {
+            List<Pair<Player, Double>> newRankPlayers = new ArrayList<>();
 
-        this.stop = true;
+            double newWinnerRank = this.updateRank(player, player);
+
+            newRankPlayers.add(new Pair<>(player, newWinnerRank));
+
+            this.players.forEach(p -> {
+                if (!p.equals(player)) {
+                    double playerRank = this.updateRank(player, p);
+                    newRankPlayers.add(new Pair<>(p, playerRank));
+                }
+            });
+
+            //Atualiza os novos ranks
+            newRankPlayers.forEach(pair -> {
+                double rank = pair.getSecond();
+                System.out.println("loser rank " + (rank - pair.getFirst().getRank()));
+                System.out.println("loser new rank " + rank);
+                pair.getFirst().setRank(rank);
+            });
+        }
+
         this.playersLock.unlock();
     }
 
-    private double updateRanks(Player winner, Player loser) {
+    private double updateRank(Player winner, Player loser) {
         // update a si mesmo
         if (winner.equals(loser)) {
             List<Double> allProbabilities = new ArrayList<>();
@@ -210,14 +222,5 @@ public class Game {
         string.append(Words.DEFAULT_COLOR);
 
         return string.toString();
-    }
-
-    private Player getPlayer(String username) {
-        for (Player player : this.players) {
-            if (player.getUsername().equals(username)) {
-                return player;
-            }
-        }
-        return null;
     }
 }
