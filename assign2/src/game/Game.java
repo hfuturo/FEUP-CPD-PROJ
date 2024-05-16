@@ -1,23 +1,29 @@
 package game;
 
 import game.words.Words;
+import utils.Pair;
 import utils.Protocol;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Game {
     public static final int PLAYERS_REQUIRED = 2;
+    public enum Modes { NORMAL, RANKED }
+    private static final double MAX_RANK_GAIN = 50;
     private final List<Player> players;
-    private final ReentrantLock playersLock;
+    private final Lock playersLock;
     private String word;
     private boolean stop;
+    private final int mode;
 
-    public Game(List<Player> players) {
+    public Game(List<Player> players, int mode) {
         this.players = players;
         this.playersLock = new ReentrantLock();
         this.stop = false;
+        this.mode = mode;
 
         Words words;
         try {
@@ -29,7 +35,7 @@ public class Game {
         }
 
         this.word = words.getRandomWord();
-        System.out.println(this.word);
+        System.out.println("Started " + mode + " game with word: " + this.word);
     }
 
     public void run() {
@@ -46,20 +52,15 @@ public class Game {
                     String word = this.getPlayerWord(player);
 
                     this.playersLock.lock();
-                    if (this.stop) {
-                        break;
-                    }
+                    boolean stop = this.stop;
                     this.playersLock.unlock();
 
+                    if (stop) {
+                        break;
+                    }
+
                     if (this.word.equals(word)) {
-                        this.playersLock.lock();
-                        this.players.forEach(p ->  {
-                            this.sendMessage(p, Protocol.INFO, "Game ended!");
-                            this.sendMessage(p, Protocol.INFO, p.equals(player) ? "Yow won!" : "You lost");
-                            this.sendMessage(p, Protocol.INFO, "The word was '" + this.word + "'");
-                        });
-                        this.stop = true;
-                        this.playersLock.unlock();
+                        this.handleWinner(player);
                         break;
                     }
 
@@ -89,6 +90,81 @@ public class Game {
             }
         });
 
+    }
+
+    private void handleWinner(Player player) {
+        this.playersLock.lock();
+        this.stop = true;
+
+        this.players.forEach(p -> {
+            this.sendMessage(p, Protocol.INFO, "Game ended!");
+            this.sendMessage(p, Protocol.INFO, p.equals(player) ? "You won!" : "You lost");
+            this.sendMessage(p, Protocol.INFO, "The word was '" + this.word + "'");
+        });
+
+        if (this.mode == Modes.RANKED.ordinal()) {
+            this.handleRanks(player);
+        }
+
+        this.playersLock.unlock();
+    }
+
+    private void handleRanks(Player player) {
+        List<Pair<Player, Double>> newRankPlayers = new ArrayList<>();
+
+        double newWinnerRank = this.updateRank(player, player);
+
+        newRankPlayers.add(new Pair<>(player, newWinnerRank));
+
+        this.players.forEach(p -> {
+            if (!p.equals(player)) {
+                double playerRank = this.updateRank(player, p);
+                newRankPlayers.add(new Pair<>(p, playerRank));
+            }
+        });
+
+        //Atualiza os novos ranks
+        newRankPlayers.forEach(pair -> {
+            double rank = pair.getSecond();
+            pair.getFirst().setRank(rank);
+        });
+    }
+
+    private double updateRank(Player winner, Player loser) {
+        // update a si mesmo
+        if (winner.equals(loser)) {
+            List<Double> allProbabilities = new ArrayList<>();
+            for (Player p : players) {
+                if (!p.equals(winner)) {
+                    //Probabilidade do winner perder
+                    double probability = 1 - calculateRank(winner, p);
+                    allProbabilities.add(probability);
+                }
+            }
+
+            //Calcular a média das probabilidades do winner ganhar a cada um dos outros jogadores
+            double sum = 0.0;
+            for (double probability : allProbabilities) {
+                sum += probability;
+            }
+
+            double variation = sum / allProbabilities.size();
+            double newRank = winner.getRank() + MAX_RANK_GAIN * variation;
+            return Math.round(newRank);
+        }
+        else {
+            // probabilidade de loser ganhar
+            double variation = this.calculateRank(loser, winner);
+            double newRank = loser.getRank() - MAX_RANK_GAIN * variation;
+            return Math.round(newRank);
+        }
+
+    }
+
+    // probabilidade de p1 ganhar
+    private double calculateRank(Player p1, Player p2){
+        double exponent = (p2.getRank() - p1.getRank()) / 400;
+        return 1 / (1 + Math.pow(10, exponent));
     }
 
     private String getPlayerWord(Player player) {
@@ -138,7 +214,7 @@ public class Game {
             string.append(word.charAt(i));
         }
 
-        // makes sure we go back to default color
+        // garante que metemos cor default no terminal
         string.append(Words.DEFAULT_COLOR);
 
         return string.toString();

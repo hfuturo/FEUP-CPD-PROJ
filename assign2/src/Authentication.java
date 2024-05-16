@@ -1,16 +1,17 @@
 import utils.Pair;
 
 import java.io.*;
-import java.net.Socket;
 import java.util.InputMismatchException;
 import java.util.Scanner;
 
 public class Authentication {
 
-    private final Socket socket;
+    private final PrintWriter writer;
+    private final BufferedReader reader;
 
-    public Authentication(Socket socket) {
-        this.socket = socket;
+    public Authentication(PrintWriter writer, BufferedReader reader) {
+        this.writer = writer;
+        this.reader = reader;
     }
 
     private String buildMessage(String operation) {
@@ -79,14 +80,9 @@ public class Authentication {
 
                 System.out.println("sending authentication message to server: " + message);
 
-                OutputStream output = socket.getOutputStream();
-                PrintWriter writer = new PrintWriter(output, true);
+                this.writer.println(message);
 
-                writer.println(message);
-
-                InputStream input = socket.getInputStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-                String response = reader.readLine(); // Read the server response once
+                String response = this.reader.readLine(); // Read the server response once
 
                 if(response.equals(operation + " successful")){
                     System.out.println("Authentication complete.");

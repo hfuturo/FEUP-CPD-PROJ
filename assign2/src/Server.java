@@ -11,59 +11,107 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
-    private final String hostname;
+    // server
     private final int port;
-    private final List<Player> waiting_players;
-    private final Lock waiting_players_lock;
-    private final List<Player> players_finished_game;
-    private final Lock players_finished_lock;
+    private static final int GAP_INCREMENT = 5;
+    private static final int INITIAL_GAP = 10;
+    private static final int GAP_INCREMENT_TIMER = 5;
+
+    // queues
+    private final List<Player> waiting_normal;
+    private final Lock waiting_normal_lock;
+    private final List<Player> waiting_ranked;
+    private final Lock waiting_ranked_lock;
+
+    // finished queue
+    private final List<Player> finished_normal;
+    private final Lock finished_normal_lock;
+    private final List<Player> finished_ranked;
+    private final Lock finished_ranked_lock;
+
+    // db
     private final Database database;
     private final Lock database_lock;
-    private ServerSocket serverSocket;
     private final HashMap<String, Pair<PrintWriter, BufferedReader>> clients;
     private final Lock clients_lock;
 
-    public Server(String hostname, int port) {
-        this.hostname = hostname;
+    public Server(int port) {
+        // server
         this.port = port;
-        this.waiting_players = new ArrayList<>();
-        this.waiting_players_lock = new ReentrantLock();
-        this.players_finished_game = new ArrayList<>();
-        this.players_finished_lock = new ReentrantLock();
+
+        // waiting queue
+        this.waiting_normal = new ArrayList<>();
+        this.waiting_normal_lock = new ReentrantLock();
+        this.waiting_ranked = new ArrayList<>();
+        this.waiting_ranked_lock = new ReentrantLock();
+
+        // finished queue
+        this.finished_normal = new ArrayList<>();
+        this.finished_normal_lock = new ReentrantLock();
+        this.finished_ranked = new ArrayList<>();
+        this.finished_ranked_lock = new ReentrantLock();
+
+        // db
         this.database_lock = new ReentrantLock();
         this.database = new Database();
         this.clients = new HashMap<>();
         this.clients_lock = new ReentrantLock();
     }
 
-    private void addPlayerToQueue(Player player) {
-        this.sendMessage(player, Protocol.INFO, "Entered waiting queue");
-        this.waiting_players_lock.lock();
-        this.waiting_players.add(player);
-        System.out.println(player.getUsername() + " entered waiting queue.");
-        this.waiting_players_lock.unlock();
+    private void addPlayerToNormalQueue(Player player) {
+        this.sendMessage(player, Protocol.INFO, "Entered normal waiting queue");
+
+        this.waiting_normal_lock.lock();
+        this.waiting_normal.add(player);
+        this.waiting_normal_lock.unlock();
     }
+
+    private void addPlayerToRankedQueue(Player player) {
+        this.sendMessage(player, Protocol.INFO, "Entered ranked waiting queue");
+
+        this.waiting_ranked_lock.lock();
+        this.waiting_ranked.add(player);
+        this.waiting_ranked_lock.unlock();
+    }
+
+    private void addPlayerToQueue(Player player, int mode) {
+        if (mode == Game.Modes.NORMAL.ordinal()) {
+            this.addPlayerToNormalQueue(player);
+        }
+        else {
+            this.addPlayerToRankedQueue(player);
+        }
+    }
+
 
     private void disconnectClient(Player player) {
         this.sendMessage(player, Protocol.TERMINATE, "Terminating connection.");
 
-        this.waiting_players_lock.lock();
-        this.waiting_players.remove(player);
-        this.waiting_players_lock.unlock();
+        this.finished_normal_lock.lock();
+        this.finished_normal.remove(player);
+        this.finished_normal_lock.unlock();
 
-        this.players_finished_lock.lock();
-        this.players_finished_game.remove(player);
-        this.players_finished_lock.unlock();
+        this.finished_ranked_lock.lock();
+        this.finished_ranked.remove(player);
+        this.finished_ranked_lock.unlock();
 
         this.clients_lock.lock();
         this.clients.remove(player.getUsername());
         this.clients_lock.unlock();
     }
 
-    private void handleFinishedPlayers(Player player) {
-        this.players_finished_lock.lock();
-        boolean player_finished_playing = this.players_finished_game.contains(player);
-        this.players_finished_lock.unlock();
+    private void handleFinishedPlayers(Player player, int mode) {
+        boolean player_finished_playing;
+        if (mode == Game.Modes.NORMAL.ordinal()) {
+            this.finished_normal_lock.lock();
+            player_finished_playing = this.finished_normal.contains(player);
+            this.finished_normal_lock.unlock();
+        }
+        else {
+            this.finished_ranked_lock.lock();
+            player_finished_playing = this.finished_ranked.contains(player);
+            this.finished_ranked_lock.unlock();
+        }
 
         if (!player_finished_playing)
             return;
@@ -86,42 +134,101 @@ public class Server {
         }
 
 
-        this.players_finished_lock.lock();
-        this.players_finished_game.remove(player);
-        this.players_finished_lock.unlock();
-
-        if (response.equals("y")) {
-            this.addPlayerToQueue(player);
+        if (mode == Game.Modes.NORMAL.ordinal()) {
+            this.finished_normal_lock.lock();
+            this.finished_normal.remove(player);
+            this.finished_normal_lock.unlock();
         }
         else {
+            this.finished_ranked_lock.lock();
+            this.finished_ranked.remove(player);
+            this.finished_ranked_lock.unlock();
+        }
+
+        if (response.equals("y")) {
+            this.addPlayerToQueue(player, mode);
+        }
+        else {
+            this.database.updateRankDatabase(player.getRank(), player.getUsername());
             this.disconnectClient(player);
         }
 
     }
 
-    private void startGame() {
-        this.waiting_players_lock.lock();
+    private void startRankedGame(Player player, int time_elapsed) {
+        this.waiting_ranked_lock.lock();
+        System.out.println("time_elapsed: " + time_elapsed);
+        System.out.println("gap: " + (Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT));
 
-        if (this.waiting_players.size() >= Game.PLAYERS_REQUIRED) {
+        if (this.waiting_ranked.size() >= Game.PLAYERS_REQUIRED) {
+            List<Player> players = new ArrayList<>();
+            players.add(player);
+
+            for (Player p : this.waiting_ranked) {
+                if (!player.equals(p) && Math.abs(player.getRank() - p.getRank()) <= Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT) {
+                    players.add(p);
+                }
+
+                if (players.size() == Game.PLAYERS_REQUIRED) {
+                    for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
+                        this.waiting_ranked.remove(players.get(i));
+                    }
+                    break;
+                }
+            }
+
+            this.waiting_ranked_lock.unlock();
+
+            if (players.size() != Game.PLAYERS_REQUIRED) {
+                return;
+            }
+
+
+            players.forEach(p -> this.sendMessage(p, Protocol.INFO, "Game is about to start!"));
+            Game game = new Game(players, Game.Modes.RANKED.ordinal());
+            game.run();
+
+            this.finished_ranked_lock.lock();
+            this.finished_ranked.addAll(players);
+            this.finished_ranked_lock.unlock();
+        }
+        else {
+            this.waiting_ranked_lock.unlock();
+        }
+    }
+
+    private void startNormalGame() {
+        this.waiting_normal_lock.lock();
+
+        if (this.waiting_normal.size() >= Game.PLAYERS_REQUIRED) {
             List<Player> players = new ArrayList<>();
 
             for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
-                Player player = this.waiting_players.remove(0);
-                players.add(player);
+                players.add(this.waiting_normal.remove(0));
             }
 
-            this.waiting_players_lock.unlock();
+            this.waiting_normal_lock.unlock();
 
             players.forEach(player -> this.sendMessage(player, Protocol.INFO, "Game is about to start!"));
-            Game game = new Game(players);
+            Game game = new Game(players, Game.Modes.NORMAL.ordinal());
             game.run();
 
-            this.players_finished_lock.lock();
-            this.players_finished_game.addAll(players);
-            this.players_finished_lock.unlock();
+            this.finished_normal_lock.lock();
+            this.finished_normal.addAll(players);
+            this.finished_normal_lock.unlock();
         }
         else {
-            this.waiting_players_lock.unlock();
+            this.waiting_normal_lock.unlock();
+        }
+    }
+
+
+
+    private void startGame(Player player, int mode, int time_elapsed) {
+        if (mode == Game.Modes.NORMAL.ordinal()) {
+            this.startNormalGame();
+        } else {
+            this.startRankedGame(player, time_elapsed);
         }
     }
 
@@ -141,8 +248,8 @@ public class Server {
                 successful = operation.equals("login") ?
                         this.database.authenticateUser(username, password) :
                         this.database.registerUser(username, password);
+                double rank = successful ? this.database.getRankFromUser(username) : -1;
                 this.database_lock.unlock();
-
 
                 if (successful) {
                     if (clients.containsKey(username)) {
@@ -154,7 +261,7 @@ public class Server {
                         Pair<PrintWriter, BufferedReader> commsChannels = new Pair<>(server_writer, server_reader);
                         clients.put(username, commsChannels);
                         server_writer.println(operation + " successful");
-                        return new Player(username, socket, commsChannels);
+                        return new Player(username, socket, commsChannels, rank);
                     }
                 }
                 else {
@@ -170,7 +277,7 @@ public class Server {
     }
 
     private void sendMessage(Player player, String protocol, String message) {
-        player.getServerWriter().println(protocol + message);
+        player.getServerWriter().println(protocol + message + "\n");
     }
 
     private String receiveMessage(Player player) {
@@ -181,32 +288,62 @@ public class Server {
         }
     }
 
-    private void handlePlayer(Player player) {
+    private void handlePlayer(Player player, int mode) {
+        int time_elapsed = 0;
+
         while (true) {
-            this.waiting_players_lock.lock();
-            boolean player_in_queue = this.waiting_players.contains(player);
-            this.waiting_players_lock.unlock();
+            boolean player_in_queue;
+
+            if (mode == Game.Modes.NORMAL.ordinal()) {
+                this.waiting_normal_lock.lock();
+                player_in_queue = this.waiting_normal.contains(player);
+                this.waiting_normal_lock.unlock();
+            }
+            else {
+                this.waiting_ranked_lock.lock();
+                player_in_queue = this.waiting_ranked.contains(player);
+                this.waiting_ranked_lock.unlock();
+            }
 
             // se player na queue, tenta começar jogo
             if (player_in_queue) {
-                this.startGame();
+                this.startGame(player, mode, time_elapsed);
             }
             else {
-                this.handleFinishedPlayers(player);
+                this.handleFinishedPlayers(player, mode);
             }
 
             // espera 1sec e tenta novamente
             try {
                 Thread.sleep(1000);
+                time_elapsed++;
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
 
+    private int getClientGameMode(Player player) {
+        this.sendMessage(player, Protocol.INFO, "Which mode do tou want to play?");
+        this.sendMessage(player, Protocol.INFO, "[0] Simple mode");
+        this.sendMessage(player, Protocol.REQUEST, "[1] Ranked mode");
+
+        while (true) {
+            String input = this.receiveMessage(player);
+            if (input == null) continue;
+
+            input = input.trim().toLowerCase();
+            if (!input.equals("0") && !input.equals("1")) {
+                this.sendMessage(player, Protocol.REQUEST, "Input must be 0 or 1");
+                continue;
+            }
+
+            return Integer.parseInt(input);
+        }
+    }
+
     private void start() {
-        try {
-            this.serverSocket = new ServerSocket(this.port);
+        try (ServerSocket serverSocket = new ServerSocket(this.port)) {
 
             System.out.println("Server is listening on port " + this.port);
 
@@ -216,8 +353,9 @@ public class Server {
                 BufferedReader server_reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 Thread.ofVirtual().start(() -> {
                     Player player = this.authenticateClient(socket, server_writer, server_reader);
-                    this.addPlayerToQueue(player);
-                    this.handlePlayer(player);
+                    int mode = this.getClientGameMode(player);
+                    this.addPlayerToQueue(player, mode);
+                    this.handlePlayer(player, mode);
                 });
             }
         } catch (Exception e) {
@@ -226,13 +364,12 @@ public class Server {
     }
 
     public static void main(String[] args) {
-        if (args.length < 1 || args.length > 3) return;
+        if (args.length != 1) return;
 
         int port = Integer.parseInt(args[0]);
-        String hostname = args.length == 1 ? "localhost" : args[1];
 
         try {
-            Server server = new Server(hostname, port);
+            Server server = new Server(port);
             server.start();
         } catch (Exception e) {
             e.printStackTrace();

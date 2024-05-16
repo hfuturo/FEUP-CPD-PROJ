@@ -1,6 +1,7 @@
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.Scanner;
 
@@ -26,9 +27,9 @@ public class Database {
         }
 
         try (BufferedWriter fileWriter = new BufferedWriter(new FileWriter(Database.FILE_PATH, true))) {
-            fileWriter.write("henrique," + this.hash("henrique123") + "\n");
-            fileWriter.write("joao," + this.hash("joao123") + "\n");
-            fileWriter.write("tiago," + this.hash("tiago123") + "\n");
+            fileWriter.write("henrique," + this.hash("henrique123") + ",150\n");
+            fileWriter.write("joao," + this.hash("joao123") + ",170\n");
+            fileWriter.write("tiago," + this.hash("tiago123") + ",200\n");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -63,7 +64,7 @@ public class Database {
                     return false;
             }
 
-            fileWriter.write(username + "," + this.hash(password) + "\n");
+            fileWriter.write(username + "," + this.hash(password) + ",0\n");
 
             return true;
         } catch (Exception e) {
@@ -71,6 +72,50 @@ public class Database {
         }
 
         return false;
+    }
+    public double getRankFromUser (String username){
+        try (Scanner scanner = new Scanner(this.file)) {
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                String[] tokens = line.split(",");
+
+
+                if (tokens[0].equals(username))
+                    return Double.parseDouble(tokens[2]);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return -1;
+    }
+
+    public void updateRankDatabase(double rank, String username) {
+        try {
+            File tempFile = new File(Database.FILE_PATH + ".temp");
+            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
+            Scanner scanner = new Scanner(this.file);
+
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                String[] tokens = line.split(",");
+
+                if (tokens[0].equals(username)) {
+                    tokens[2] = String.valueOf(rank);
+                    line = String.join(",", tokens);
+                }
+
+                writer.write(line + "\n");
+            }
+
+            writer.close();
+            scanner.close();
+
+            this.file.delete();
+            tempFile.renameTo(this.file);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private String hash(String input) {

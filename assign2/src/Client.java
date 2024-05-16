@@ -9,6 +9,8 @@ public class Client {
     private final String hostname;
     private final int port;
     private Socket socket;
+    private PrintWriter writer;
+    private BufferedReader reader;
 
     public Client(String hostname, int port) {
         this.hostname = hostname;
@@ -17,11 +19,14 @@ public class Client {
     }
 
     private void listen() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
-                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
+        try {
 
             while (true) {
-                String[] command = reader.readLine().split("\\|");
+                String[] command = this.reader.readLine().split("\\|");
+
+                // flush input
+                if (command.length == 1) continue;
+
                 String type = command[0] + "|";
                 String content = command[1];
 
@@ -31,12 +36,12 @@ public class Client {
                         System.out.println(content);
                         Scanner scanner = new Scanner(System.in);
                         String response = scanner.nextLine();
-                        writer.println(response);
+                        this.writer.println(response);
                     }
                     case Protocol.TERMINATE -> {
                         System.out.println(content);
-                        reader.close();
-                        writer.close();
+                        this.reader.close();
+                        this.writer.close();
                         return;
                     }
                 }
@@ -48,13 +53,16 @@ public class Client {
     }
 
     private boolean authenticate() {
-        Authentication authentication = new Authentication(this.socket);
+        Authentication authentication = new Authentication(this.writer, this.reader);
         return authentication.authenticate();
     }
 
     private void start() {
         try  {
             this.socket = new Socket(this.hostname, this.port);
+            this.writer = new PrintWriter(socket.getOutputStream(), true);
+            this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
             boolean ret = this.authenticate();
 
             if (ret) {
