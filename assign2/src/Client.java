@@ -31,6 +31,7 @@ public class Client {
                 String content = command[1];
 
                 switch (type) {
+                    case Protocol.PING -> this.writer.println(Protocol.ACK);
                     case Protocol.INFO -> System.out.println(content);
                     case Protocol.REQUEST -> {
                         System.out.println(content);

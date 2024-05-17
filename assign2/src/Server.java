@@ -5,7 +5,6 @@ import utils.Protocol;
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -32,7 +31,7 @@ public class Server {
     // db
     private final Database database;
     private final Lock database_lock;
-    private final HashMap<String, Pair<PrintWriter, BufferedReader>> clients;
+    private final List<Player> clients;
     private final Lock clients_lock;
 
     public Server(int port) {
@@ -54,7 +53,7 @@ public class Server {
         // db
         this.database_lock = new ReentrantLock();
         this.database = new Database();
-        this.clients = new HashMap<>();
+        this.clients = new ArrayList<>();
         this.clients_lock = new ReentrantLock();
     }
 
@@ -96,7 +95,7 @@ public class Server {
         this.finished_ranked_lock.unlock();
 
         this.clients_lock.lock();
-        this.clients.remove(player.getUsername());
+        this.clients.remove(player);
         this.clients_lock.unlock();
     }
 
@@ -115,6 +114,8 @@ public class Server {
 
         if (!player_finished_playing)
             return;
+
+        player.setPlaying(false);
 
         this.sendMessage(player, Protocol.REQUEST, "Do you want to play again? (y/n)");
         String response;
@@ -147,6 +148,7 @@ public class Server {
 
         if (response.equals("y")) {
             this.addPlayerToQueue(player, mode);
+            player.setPlaying(true);
         }
         else {
             this.database.updateRankDatabase(player.getRank(), player.getUsername());
@@ -165,7 +167,9 @@ public class Server {
             players.add(player);
 
             for (Player p : this.waiting_ranked) {
-                if (!player.equals(p) && Math.abs(player.getRank() - p.getRank()) <= Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT) {
+                if (p.isConnected() && !player.equals(p) &&
+                        Math.abs(player.getRank() - p.getRank()) <= Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT)
+                {
                     players.add(p);
                 }
 
@@ -184,7 +188,11 @@ public class Server {
             }
 
 
-            players.forEach(p -> this.sendMessage(p, Protocol.INFO, "Game is about to start!"));
+            players.forEach(p -> {
+                p.setPlaying(true);
+                this.sendMessage(p, Protocol.INFO, "Game is about to start!");
+            });
+
             Game game = new Game(players, Game.Modes.RANKED.ordinal());
             game.run();
 
@@ -209,7 +217,11 @@ public class Server {
 
             this.waiting_normal_lock.unlock();
 
-            players.forEach(player -> this.sendMessage(player, Protocol.INFO, "Game is about to start!"));
+            players.forEach(player -> {
+                player.setPlaying(true);
+                this.sendMessage(player, Protocol.INFO, "Game is about to start!");
+            });
+
             Game game = new Game(players, Game.Modes.NORMAL.ordinal());
             game.run();
 
@@ -225,6 +237,8 @@ public class Server {
 
 
     private void startGame(Player player, int mode, int time_elapsed) {
+        if (!player.isConnected()) return;
+
         if (mode == Game.Modes.NORMAL.ordinal()) {
             this.startNormalGame();
         } else {
@@ -252,16 +266,17 @@ public class Server {
                 this.database_lock.unlock();
 
                 if (successful) {
-                    if (clients.containsKey(username)) {
+                    if (this.clientConnected(username)) {
                         successful = false;
                         server_writer.println(operation + " error (User is already logged in)");
                     }
                     else {
                         System.out.println(username + " connected");
                         Pair<PrintWriter, BufferedReader> commsChannels = new Pair<>(server_writer, server_reader);
-                        clients.put(username, commsChannels);
+                        Player player = new Player(username, socket, commsChannels, rank);
+                        clients.add(player);
                         server_writer.println(operation + " successful");
-                        return new Player(username, socket, commsChannels, rank);
+                        return player;
                     }
                 }
                 else {
@@ -274,6 +289,20 @@ public class Server {
         }
 
         return null;
+    }
+
+    private boolean clientConnected(String username) {
+        this.clients_lock.lock();
+
+        for (Player p : this.clients) {
+            if (p.getUsername().equals(username)) {
+                this.clients_lock.unlock();
+                return true;
+            }
+        }
+
+        this.clients_lock.unlock();
+        return false;
     }
 
     private void sendMessage(Player player, String protocol, String message) {
@@ -323,6 +352,34 @@ public class Server {
         }
     }
 
+    private void pingClients() {
+        while (true) {
+
+            this.clients_lock.lock();
+
+            for (Player player : this.clients) {
+                if (player.isPlaying()) continue;
+
+                Thread.ofVirtual().start(() -> {
+                    this.sendMessage(player, Protocol.PING, Protocol.EMPTY);
+                    String message = this.receiveMessage(player);
+                    player.setConnected(message != null);
+
+                    System.out.println(player.getUsername() + (message == null ? " dead" : " alive with " + message));
+                });
+            }
+
+            this.clients_lock.unlock();
+
+            // espera 5sec e pinga novamente
+            try {
+                Thread.sleep(5000);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     private int getClientGameMode(Player player) {
         this.sendMessage(player, Protocol.INFO, "Which mode do tou want to play?");
         this.sendMessage(player, Protocol.INFO, "[0] Simple mode");
@@ -346,6 +403,8 @@ public class Server {
         try (ServerSocket serverSocket = new ServerSocket(this.port)) {
 
             System.out.println("Server is listening on port " + this.port);
+
+            Thread.ofVirtual().start(this::pingClients);
 
             while (true) {
                 Socket socket = serverSocket.accept();

@@ -14,6 +14,8 @@ public class Player {
     private final Pair<PrintWriter, BufferedReader> serverComms;
     private double rank;
     private final List<String> wordsUsed;
+    private boolean connected;
+    private boolean playing;
 
     public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms, double rank) {
         this.username = username;
@@ -21,6 +23,8 @@ public class Player {
         this.serverComms = serverComms;
         this.rank = rank;
         this.wordsUsed = new ArrayList<>();
+        this.connected = true;
+        this.playing = false;
     }
 
     public PrintWriter getServerWriter() {
@@ -55,6 +59,22 @@ public class Player {
 
     public void resetUsedWords() {
         this.wordsUsed.clear();
+    }
+
+    public void setConnected(boolean connected) {
+        this.connected = connected;
+    }
+
+    public boolean isConnected() {
+        return this.connected;
+    }
+
+    public void setPlaying(boolean playing) {
+        this.playing = playing;
+    }
+
+    public boolean isPlaying() {
+        return this.playing;
     }
 
     public boolean equals(Player player) {
