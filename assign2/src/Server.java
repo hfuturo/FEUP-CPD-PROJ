@@ -97,6 +97,8 @@ public class Server {
         this.clients_lock.lock();
         this.clients.remove(player);
         this.clients_lock.unlock();
+
+        System.out.println(player.getUsername() + " left the game");
     }
 
     private void handleFinishedPlayers(Player player, int mode) {
@@ -148,7 +150,6 @@ public class Server {
 
         if (response.equals("y")) {
             this.addPlayerToQueue(player, mode);
-            player.setPlaying(true);
         }
         else {
             this.database.updateRankDatabase(player.getRank(), player.getUsername());
@@ -158,16 +159,19 @@ public class Server {
     }
 
     private void startRankedGame(Player player, int time_elapsed) {
+        if (!player.isConnected()) return;
+
         this.waiting_ranked_lock.lock();
-        System.out.println("time_elapsed: " + time_elapsed);
-        System.out.println("gap: " + (Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT));
+        System.out.println(player.getUsername() + " gap: " +
+                (Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT) +
+                " time_elapsed: " + time_elapsed);
 
         if (this.waiting_ranked.size() >= Game.PLAYERS_REQUIRED) {
             List<Player> players = new ArrayList<>();
             players.add(player);
 
             for (Player p : this.waiting_ranked) {
-                if (p.isConnected() && !player.equals(p) &&
+                if (!player.equals(p) && p.isConnected() &&
                         Math.abs(player.getRank() - p.getRank()) <= Server.INITIAL_GAP + (Math.floor((double)time_elapsed / Server.GAP_INCREMENT_TIMER)) * Server.GAP_INCREMENT)
                 {
                     players.add(p);
@@ -211,11 +215,24 @@ public class Server {
         if (this.waiting_normal.size() >= Game.PLAYERS_REQUIRED) {
             List<Player> players = new ArrayList<>();
 
-            for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
-                players.add(this.waiting_normal.remove(0));
+            for (Player player : this.waiting_normal) {
+                if (!player.isConnected()) continue;
+
+                players.add(player);
+
+                if (players.size() == Game.PLAYERS_REQUIRED) {
+                    for (int i = 0; i < Game.PLAYERS_REQUIRED; i++) {
+                        this.waiting_normal.remove(players.get(i));
+                    }
+                    break;
+                }
             }
 
             this.waiting_normal_lock.unlock();
+
+            if (players.size() != Game.PLAYERS_REQUIRED) {
+                return;
+            }
 
             players.forEach(player -> {
                 player.setPlaying(true);
@@ -246,7 +263,7 @@ public class Server {
         }
     }
 
-    private Player authenticateClient(Socket socket, PrintWriter server_writer, BufferedReader server_reader) {
+    private Pair<Player, Boolean> authenticateClient(Socket socket, PrintWriter server_writer, BufferedReader server_reader) {
         try {
             boolean successful = false;
             while (!successful) {
@@ -263,21 +280,50 @@ public class Server {
                         this.database.authenticateUser(username, password) :
                         this.database.registerUser(username, password);
                 double rank = successful ? this.database.getRankFromUser(username) : -1;
+                if (successful) database.assignToken(username);
                 this.database_lock.unlock();
 
                 if (successful) {
+                    this.clients_lock.lock();
+
+                    Pair<PrintWriter, BufferedReader> commsChannels = new Pair<>(server_writer, server_reader);
+                    Player player;
+                    boolean userReconnected;
+
+                    // se tiver conectado, significa que perdeu conexao ou outra pessoa tenta entrar na conta
                     if (this.clientConnected(username)) {
-                        successful = false;
-                        server_writer.println(operation + " error (User is already logged in)");
+                        player = this.getPlayerByUsername(username);
+
+                        if (player == null) {
+                            successful = false;
+                            this.clients_lock.unlock();
+                            continue;
+                        }
+
+                        // outra pessoa tenta entrar na conta
+                        if (player.isConnected()) {
+                            successful = false;
+                            server_writer.println(operation + " error (user already logged in)");
+                            this.clients_lock.unlock();
+                            continue;
+                        }
+
+                        System.out.println(username + " reconnected");
+                        player.setServerComms(commsChannels);
+                        userReconnected = true;
+                        server_writer.println(operation + " successful");
                     }
                     else {
                         System.out.println(username + " connected");
-                        Pair<PrintWriter, BufferedReader> commsChannels = new Pair<>(server_writer, server_reader);
-                        Player player = new Player(username, socket, commsChannels, rank);
+                        player = new Player(username, socket, commsChannels, rank);
                         clients.add(player);
+                        userReconnected = false;
                         server_writer.println(operation + " successful");
-                        return player;
                     }
+
+                    this.clients_lock.unlock();
+                    return new Pair<>(player, userReconnected);
+
                 }
                 else {
                     server_writer.println(operation + " error");
@@ -305,6 +351,14 @@ public class Server {
         return false;
     }
 
+    private Player getPlayerByUsername(String username) {
+        for (Player player : this.clients) {
+            if (player.getUsername().equals(username))
+                return player;
+        }
+        return null;
+    }
+
     private void sendMessage(Player player, String protocol, String message) {
         player.getServerWriter().println(protocol + message + "\n");
     }
@@ -321,6 +375,7 @@ public class Server {
         int time_elapsed = 0;
 
         while (true) {
+
             boolean player_in_queue;
 
             if (mode == Game.Modes.NORMAL.ordinal()) {
@@ -345,7 +400,10 @@ public class Server {
             // espera 1sec e tenta novamente
             try {
                 Thread.sleep(1000);
-                time_elapsed++;
+
+                if (player.isConnected()) {
+                    time_elapsed++;
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -364,16 +422,14 @@ public class Server {
                     this.sendMessage(player, Protocol.PING, Protocol.EMPTY);
                     String message = this.receiveMessage(player);
                     player.setConnected(message != null);
-
-                    System.out.println(player.getUsername() + (message == null ? " dead" : " alive with " + message));
                 });
             }
 
             this.clients_lock.unlock();
 
-            // espera 5sec e pinga novamente
+            // espera 1sec e pinga novamente
             try {
-                Thread.sleep(5000);
+                Thread.sleep(1000);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -411,15 +467,40 @@ public class Server {
                 PrintWriter server_writer = new PrintWriter(socket.getOutputStream(), true);
                 BufferedReader server_reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 Thread.ofVirtual().start(() -> {
-                    Player player = this.authenticateClient(socket, server_writer, server_reader);
-                    int mode = this.getClientGameMode(player);
-                    this.addPlayerToQueue(player, mode);
-                    this.handlePlayer(player, mode);
+                    Pair<Player, Boolean> info = this.authenticateClient(socket, server_writer, server_reader);
+
+                    Player player = info.getFirst();
+                    boolean reconnected = info.getSecond();
+
+                    int mode;
+
+                    if (reconnected) {
+                        mode = this.getModeByPlayer(player);
+                        player.setConnected(true);
+                    }
+                    else {
+                        mode = this.getClientGameMode(player);
+                        this.addPlayerToQueue(player, mode);
+                        this.handlePlayer(player, mode);
+                    }
+
                 });
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private int getModeByPlayer(Player player) {
+        this.waiting_ranked_lock.lock();
+        this.finished_ranked_lock.lock();
+        boolean isRanked = waiting_ranked.contains(player) || finished_ranked.contains(player);
+        this.waiting_ranked_lock.unlock();
+        this.finished_ranked_lock.unlock();
+
+        return isRanked ?
+                Game.Modes.RANKED.ordinal() :
+                Game.Modes.NORMAL.ordinal();
     }
 
     public static void main(String[] args) {

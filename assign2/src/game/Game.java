@@ -35,7 +35,7 @@ public class Game {
         }
 
         this.word = words.getRandomWord();
-        System.out.println("Started " + mode + " game with word: " + this.word);
+        System.out.println("Started " + (mode == 0 ? "normal" : "ranked") + " game with word: " + this.word);
     }
 
     public void run() {

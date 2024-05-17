@@ -11,7 +11,7 @@ public class Player {
 
     private final String username;
     private final Socket socket;
-    private final Pair<PrintWriter, BufferedReader> serverComms;
+    private Pair<PrintWriter, BufferedReader> serverComms;
     private double rank;
     private final List<String> wordsUsed;
     private boolean connected;
@@ -75,6 +75,10 @@ public class Player {
 
     public boolean isPlaying() {
         return this.playing;
+    }
+
+    public void setServerComms(Pair<PrintWriter, BufferedReader> serverComms) {
+        this.serverComms = serverComms;
     }
 
     public boolean equals(Player player) {
