@@ -118,53 +118,6 @@ public class Database {
         }
     }
 
-    public void assignToken(String username) {
-        try {
-            File tempFile = new File(Database.FILE_PATH + ".temp");
-            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
-            Scanner scanner = new Scanner(this.file);
-
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                String[] tokens = line.split(",");
-
-                if (tokens[0].equals(username)) {
-                    if (tokens.length == 4) {
-                        tokens[3] = this.generateToken();
-                        line = String.join(",", tokens);
-                    }
-                    else {
-                        line = String.join(",", tokens);
-                        line += "," + this.generateToken();
-                    }
-                }
-
-                writer.write(line + "\n");
-            }
-
-            writer.close();
-            scanner.close();
-
-            this.file.delete();
-            tempFile.renameTo(this.file);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private String generateToken() {
-        return this.hash(this.generateRandomWord());
-    }
-
-    private String generateRandomWord() {
-        StringBuilder word = new StringBuilder();
-        for (int i = 0; i < 10; i++) {
-            word.append((char)(Math.random() * 26 + 97));
-        }
-        return word.toString();
-    }
-
     private String hash(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

@@ -3,23 +3,20 @@ package game;
 import utils.Pair;
 
 import java.io.*;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Player {
 
     private final String username;
-    private final Socket socket;
     private Pair<PrintWriter, BufferedReader> serverComms;
     private double rank;
     private final List<String> wordsUsed;
     private boolean connected;
     private boolean playing;
 
-    public Player(String username, Socket socket, Pair<PrintWriter, BufferedReader> serverComms, double rank) {
+    public Player(String username, Pair<PrintWriter, BufferedReader> serverComms, double rank) {
         this.username = username;
-        this.socket = socket;
         this.serverComms = serverComms;
         this.rank = rank;
         this.wordsUsed = new ArrayList<>();
@@ -34,8 +31,6 @@ public class Player {
     public BufferedReader getServerReader() {
         return this.serverComms.getSecond();
     }
-
-    public Socket getSocket() { return this.socket; }
 
     public String getUsername() {
         return this.username;

@@ -263,7 +263,7 @@ public class Server {
         }
     }
 
-    private Pair<Player, Boolean> authenticateClient(Socket socket, PrintWriter server_writer, BufferedReader server_reader) {
+    private Pair<Player, Boolean> authenticateClient(PrintWriter server_writer, BufferedReader server_reader) {
         try {
             boolean successful = false;
             while (!successful) {
@@ -280,7 +280,6 @@ public class Server {
                         this.database.authenticateUser(username, password) :
                         this.database.registerUser(username, password);
                 double rank = successful ? this.database.getRankFromUser(username) : -1;
-                if (successful) database.assignToken(username);
                 this.database_lock.unlock();
 
                 if (successful) {
@@ -315,7 +314,7 @@ public class Server {
                     }
                     else {
                         System.out.println(username + " connected");
-                        player = new Player(username, socket, commsChannels, rank);
+                        player = new Player(username, commsChannels, rank);
                         clients.add(player);
                         userReconnected = false;
                         server_writer.println(operation + " successful");
@@ -419,9 +418,9 @@ public class Server {
                 if (player.isPlaying()) continue;
 
                 Thread.ofVirtual().start(() -> {
-                    this.sendMessage(player, Protocol.PING, Protocol.EMPTY);
+                    this.sendMessage(player, Protocol.PING, "Protocol.EMPTY");
                     String message = this.receiveMessage(player);
-                    player.setConnected(message != null);
+                    player.setConnected(message != null && message.equals(Protocol.ACK));
                 });
             }
 
@@ -467,19 +466,16 @@ public class Server {
                 PrintWriter server_writer = new PrintWriter(socket.getOutputStream(), true);
                 BufferedReader server_reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 Thread.ofVirtual().start(() -> {
-                    Pair<Player, Boolean> info = this.authenticateClient(socket, server_writer, server_reader);
+                    Pair<Player, Boolean> info = this.authenticateClient(server_writer, server_reader);
 
                     Player player = info.getFirst();
                     boolean reconnected = info.getSecond();
 
-                    int mode;
-
                     if (reconnected) {
-                        mode = this.getModeByPlayer(player);
                         player.setConnected(true);
                     }
                     else {
-                        mode = this.getClientGameMode(player);
+                        int mode = this.getClientGameMode(player);
                         this.addPlayerToQueue(player, mode);
                         this.handlePlayer(player, mode);
                     }
@@ -489,18 +485,6 @@ public class Server {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private int getModeByPlayer(Player player) {
-        this.waiting_ranked_lock.lock();
-        this.finished_ranked_lock.lock();
-        boolean isRanked = waiting_ranked.contains(player) || finished_ranked.contains(player);
-        this.waiting_ranked_lock.unlock();
-        this.finished_ranked_lock.unlock();
-
-        return isRanked ?
-                Game.Modes.RANKED.ordinal() :
-                Game.Modes.NORMAL.ordinal();
     }
 
     public static void main(String[] args) {
