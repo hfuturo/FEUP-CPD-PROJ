@@ -5,6 +5,8 @@ import utils.Pair;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Player {
 
@@ -14,6 +16,7 @@ public class Player {
     private final List<String> wordsUsed;
     private boolean connected;
     private boolean playing;
+    private final Lock lock;
 
     public Player(String username, Pair<PrintWriter, BufferedReader> serverComms, double rank) {
         this.username = username;
@@ -22,6 +25,7 @@ public class Player {
         this.wordsUsed = new ArrayList<>();
         this.connected = true;
         this.playing = false;
+        this.lock = new ReentrantLock();
     }
 
     public PrintWriter getServerWriter() {
@@ -57,19 +61,29 @@ public class Player {
     }
 
     public void setConnected(boolean connected) {
+        this.lock.lock();
         this.connected = connected;
+        this.lock.unlock();
     }
 
     public boolean isConnected() {
-        return this.connected;
+        this.lock.lock();
+        boolean connected = this.connected;
+        this.lock.unlock();
+        return connected;
     }
 
     public void setPlaying(boolean playing) {
+        this.lock.lock();
         this.playing = playing;
+        this.lock.unlock();
     }
 
     public boolean isPlaying() {
-        return this.playing;
+        this.lock.lock();
+        boolean playing = this.playing;
+        this.lock.unlock();
+        return playing;
     }
 
     public void setServerComms(Pair<PrintWriter, BufferedReader> serverComms) {
