@@ -30,5 +30,14 @@ java Server <port>
 java Client <port>
 ```
 
+### Login information
+There are three accounts that are created by default. This information is stored in a file called `database.txt`. If this file does not exist, it will be created automatically when we run the server.
 
-
+- username: tiago
+- password: tiago123
+---
+- username: joao
+- password: joao123
+---
+- username: henrique
+- passoword: henrique123
