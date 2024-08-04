@@ -1,5 +1,3 @@
-# Grade: 15.8
-
 # Compile and Run Instructions
 
 ## Requirements
